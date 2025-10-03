@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planilha de Orçamento Pessoal</title>
+    <!-- Favicon: Ícone de cifrão em SVG -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%233B82F6'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-size='50' fill='white' font-weight='bold'>$</text></svg>">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Inter Font -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .tab-button.active {
+            background-color: #1f2937;
+            color: white;
+        }
+        .hidden {
+            display: none;
+        }
+        .modal {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="p-6 md:p-12">
+    <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-6 text-center">Planilha de Orçamento Pessoal</h1>
+
+        <!-- Tab Navigation -->
+        <div class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-6">
+            <button id="dashboard-tab-btn" class="tab-button active flex-1 py-3 px-4 rounded-lg font-semibold text-sm transition-colors duration-200 bg-gray-800 text-white shadow-md">Dashboard (Resumo Mensal)</button>
+            <button id="lancamentos-tab-btn" class="tab-button flex-1 py-3 px-4 rounded-lg font-semibold text-sm transition-colors duration-200 text-gray-700 bg-gray-200 hover:bg-gray-300">Lançamentos</button>
+            <button id="planejamento-tab-btn" class="tab-button flex-1 py-3 px-4 rounded-lg font-semibold text-sm transition-colors duration-200 text-gray-700 bg-gray-200 hover:bg-gray-300">Planejamento Mensal</button>
+        </div>
+
+        <!-- Dashboard Tab Content -->
+        <div id="dashboard-tab-content" class="tab-content active">
+            <div class="flex flex-col md:flex-row items-center justify-between mb-6 space-y-4 md:space-y-0">
+                <div class="flex space-x-2 items-center">
+                    <label for="month-select" class="text-gray-600 font-medium">Mês:</label>
+                    <input type="month" id="month-select" class="form-input rounded-lg border-gray-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div class="flex space-x-2">
+                    <button id="export-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">Exportar (CSV)</button>
+                    <button id="clear-data-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">Limpar Dados</button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div class="bg-green-100 p-6 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700">Receitas Totais</h2>
+                    <p id="total-receitas" class="text-3xl font-bold text-green-600 mt-2">R$ 0,00</p>
+                </div>
+                <div class="bg-red-100 p-6 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700">Despesas Totais</h2>
+                    <p id="total-despesas" class="text-3xl font-bold text-red-600 mt-2">R$ 0,00</p>
+                </div>
+                <div class="bg-blue-100 p-6 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-semibold text-gray-700">Saldo do Mês</h2>
+                    <p id="saldo-mes" class="text-3xl font-bold text-blue-600 mt-2">R$ 0,00</p>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-gray-50 p-6 rounded-xl shadow-sm flex flex-col items-center">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4">Ganhos vs. Gastos</h2>
+                    <canvas id="ganhos-gastos-chart"></canvas>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-xl shadow-sm flex flex-col items-center">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4">Despesas por Categoria</h2>
+                    <canvas id="despesas-categoria-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lançamentos Tab Content -->
+        <div id="lancamentos-tab-content" class="tab-content">
+            <div class="mb-4">
+                <button id="add-lancamento-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">
+                    + Adicionar Lançamento
+                </button>
+            </div>
+            <div class="overflow-x-auto bg-gray-50 rounded-xl shadow-sm">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoria</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lancamentos-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Lançamentos will be inserted here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Planejamento Mensal Tab Content -->
+        <div id="planejamento-tab-content" class="tab-content">
+            <!-- Planejamento de Receitas -->
+            <div class="mb-8">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Contas a Receber (Ganhos Previstos)</h2>
+                <div class="overflow-x-auto bg-gray-50 rounded-xl shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="receber-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Receitas planned will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button id="add-receber-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">
+                        + Adicionar Receita
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Planejamento de Despesas -->
+            <div>
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Contas a Pagar (Gastos Previstos)</h2>
+                <div class="overflow-x-auto bg-gray-50 rounded-xl shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data de Vencimento</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pagar-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Gastos planned will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button id="add-pagar-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">
+                        + Adicionar Gasto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Adicionar/Editar Lançamento -->
+    <div id="transaction-modal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-md">
+            <h2 id="modal-title" class="text-2xl font-bold mb-4 text-gray-800">Adicionar Lançamento</h2>
+            <form id="transaction-form">
+                <!-- Add a new hidden input to track if the transaction comes from planning -->
+                <input type="hidden" id="planning-source-type">
+                <input type="hidden" id="planning-source-index">
+                <input type="hidden" id="transaction-index">
+                <div class="space-y-4">
+                    <div>
+                        <label for="transaction-date" class="block text-sm font-medium text-gray-700">Data:</label>
+                        <input type="date" id="transaction-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="transaction-type" class="block text-sm font-medium text-gray-700">Tipo:</label>
+                        <select id="transaction-type" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="Receita">Receita</option>
+                            <option value="Despesa">Despesa</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="transaction-description" class="block text-sm font-medium text-gray-700">Descrição:</label>
+                        <input type="text" id="transaction-description" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="transaction-category" class="block text-sm font-medium text-gray-700">Categoria:</label>
+                        <select id="transaction-category" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label for="transaction-value" class="block text-sm font-medium text-gray-700">Valor:</label>
+                        <input type="number" step="0.01" id="transaction-value" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" id="cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors duration-200">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors duration-200">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Adicionar/Editar Planejamento -->
+    <div id="planning-modal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-md">
+            <h2 id="planning-modal-title" class="text-2xl font-bold mb-4 text-gray-800">Adicionar Planejamento</h2>
+            <form id="planning-form">
+                <input type="hidden" id="planning-type">
+                <input type="hidden" id="planning-index">
+                <div class="space-y-4">
+                    <div>
+                        <label for="planning-date" class="block text-sm font-medium text-gray-700">Data:</label>
+                        <input type="date" id="planning-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="planning-description" class="block text-sm font-medium text-gray-700">Descrição:</label>
+                        <input type="text" id="planning-description" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="planning-value" class="block text-sm font-medium text-gray-700">Valor:</label>
+                        <input type="number" step="0.01" id="planning-value" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" id="planning-cancel-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors duration-200">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors duration-200">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Data Structures
+        let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+        let planningData = JSON.parse(localStorage.getItem('planningData')) || { receber: [], pagar: [] };
+
+        // Constants and UI Elements
+        const transactionTypes = ['Receita', 'Despesa'];
+        const incomeCategories = ['Salário', 'Renda Extra', 'À Receber', 'Empréstimos', 'Outros'];
+        const expenseCategories = ['Moradia', 'Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Educação', 'Contas Fixas', 'Cartões', 'Outros'];
+        
+        const tabs = {
+            'dashboard': document.getElementById('dashboard-tab-content'),
+            'lancamentos': document.getElementById('lancamentos-tab-content'),
+            'planejamento': document.getElementById('planejamento-tab-content')
+        };
+        const tabButtons = {
+            'dashboard': document.getElementById('dashboard-tab-btn'),
+            'lancamentos': document.getElementById('lancamentos-tab-btn'),
+            'planejamento': document.getElementById('planejamento-tab-btn')
+        };
+        
+        const monthSelect = document.getElementById('month-select');
+        
+        const totalReceitasEl = document.getElementById('total-receitas');
+        const totalDespesasEl = document.getElementById('total-despesas');
+        const saldoMesEl = document.getElementById('saldo-mes');
+        
+        const lancamentosTableBody = document.getElementById('lancamentos-table-body');
+        const receberTableBody = document.getElementById('receber-table-body');
+        const pagarTableBody = document.getElementById('pagar-table-body');
+        
+        const addLancamentoBtn = document.getElementById('add-lancamento-btn');
+        const transactionModal = document.getElementById('transaction-modal');
+        const transactionForm = document.getElementById('transaction-form');
+        const modalTitle = document.getElementById('modal-title');
+        const transactionIndexInput = document.getElementById('transaction-index');
+        const transactionDateInput = document.getElementById('transaction-date');
+        const transactionTypeSelect = document.getElementById('transaction-type');
+        const transactionDescriptionInput = document.getElementById('transaction-description');
+        const transactionCategorySelect = document.getElementById('transaction-category');
+        const transactionValueInput = document.getElementById('transaction-value');
+        const cancelBtn = document.getElementById('cancel-btn');
+
+        // New planning modal elements
+        const planningModal = document.getElementById('planning-modal');
+        const planningModalTitle = document.getElementById('planning-modal-title');
+        const planningForm = document.getElementById('planning-form');
+        const planningTypeInput = document.getElementById('planning-type');
+        const planningIndexInput = document.getElementById('planning-index');
+        const planningDateInput = document.getElementById('planning-date');
+        const planningDescriptionInput = document.getElementById('planning-description');
+        const planningValueInput = document.getElementById('planning-value');
+        const planningCancelBtn = document.getElementById('planning-cancel-btn');
+
+        // New hidden inputs for linking planning to transaction
+        const planningSourceTypeInput = document.getElementById('planning-source-type');
+        const planningSourceIndexInput = document.getElementById('planning-source-index');
+
+        // Chart instances
+        let ganhosGastosChart = null;
+        let despesasCategoriaChart = null;
+
+        // --- Core Functions ---
+
+        function saveToLocalStorage() {
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+            localStorage.setItem('planningData', JSON.stringify(planningData));
+        }
+
+        function switchTab(tabName) {
+            // Hide all tabs
+            Object.values(tabs).forEach(tab => tab.classList.remove('active'));
+            // Deactivate all buttons
+            Object.values(tabButtons).forEach(btn => {
+                btn.classList.remove('active', 'bg-gray-800', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+            });
+            
+            // Show the selected tab and activate its button
+            tabs[tabName].classList.add('active');
+            tabButtons[tabName].classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+            tabButtons[tabName].classList.add('active', 'bg-gray-800', 'text-white');
+
+            if (tabName === 'dashboard') {
+                updateDashboard();
+            }
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+        }
+
+        function formatDate(dateString) {
+            const [year, month, day] = dateString.split('-');
+            return `${day}/${month}/${year}`;
+        }
+        
+        // --- Dashboard Functions ---
+
+        function updateDashboard() {
+            const [selectedYear, selectedMonth] = monthSelect.value.split('-').map(Number);
+            
+            const filteredTransactions = transactions.filter(t => {
+                const date = new Date(t.date);
+                return date.getFullYear() === selectedYear && (date.getMonth() + 1) === selectedMonth;
+            });
+
+            const totalReceitas = filteredTransactions.filter(t => t.type === 'Receita').reduce((acc, t) => acc + t.value, 0);
+            const totalDespesas = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => acc + t.value, 0);
+            const saldoMes = totalReceitas - totalDespesas;
+
+            totalReceitasEl.textContent = formatCurrency(totalReceitas);
+            totalDespesasEl.textContent = formatCurrency(totalDespesas);
+            saldoMesEl.textContent = formatCurrency(saldoMes);
+            saldoMesEl.style.color = saldoMes >= 0 ? '#10B981' : '#EF4444'; // Tailwind green-500 vs red-500
+
+            updateCharts(totalReceitas, totalDespesas, filteredTransactions);
+        }
+
+        function updateCharts(totalReceitas, totalDespesas, filteredTransactions) {
+            // Chart Ganhos vs. Gastos
+            if (ganhosGastosChart) ganhosGastosChart.destroy();
+            const ctx1 = document.getElementById('ganhos-gastos-chart').getContext('2d');
+            ganhosGastosChart = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Receitas', 'Despesas'],
+                    datasets: [{
+                        label: 'Valores',
+                        data: [totalReceitas, totalDespesas],
+                        backgroundColor: ['#10B981', '#EF4444'], // green-500, red-500
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Chart Despesas por Categoria
+            if (despesasCategoriaChart) despesasCategoriaChart.destroy();
+            const expensesByCategory = filteredTransactions.filter(t => t.type === 'Despesa').reduce((acc, t) => {
+                acc[t.category] = (acc[t.category] || 0) + t.value;
+                return acc;
+            }, {});
+
+            const ctx2 = document.getElementById('despesas-categoria-chart').getContext('2d');
+            despesasCategoriaChart = new Chart(ctx2, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(expensesByCategory),
+                    datasets: [{
+                        data: Object.values(expensesByCategory),
+                        backgroundColor: [
+                            '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#6B7280', '#EC4899', '#7C3AED', '#EAB308', '#06B6D4'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+        }
+
+        // --- Lançamentos Functions ---
+
+        function renderLancamentosTable() {
+            // Sort transactions by date in ascending order
+            const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            lancamentosTableBody.innerHTML = '';
+            sortedTransactions.forEach((transaction, index) => {
+                // Find the original index for editing/deleting
+                const originalIndex = transactions.indexOf(transaction);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${formatDate(transaction.date)}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${transaction.type}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${transaction.description}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${transaction.category}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">${formatCurrency(transaction.value)}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                        <button onclick="editTransaction(${originalIndex})" class="text-indigo-600 hover:text-indigo-900 mr-2">Editar</button>
+                        <button onclick="deleteTransaction(${originalIndex})" class="text-red-600 hover:text-red-900">Excluir</button>
+                    </td>
+                `;
+                lancamentosTableBody.appendChild(row);
+            });
+        }
+
+        function showTransactionModal() {
+            transactionModal.classList.remove('hidden');
+        }
+
+        function hideTransactionModal() {
+            transactionModal.classList.add('hidden');
+            transactionForm.reset();
+            transactionIndexInput.value = '';
+            planningSourceTypeInput.value = '';
+            planningSourceIndexInput.value = '';
+        }
+
+        function populateCategorySelect(type) {
+            let categories = type === 'Receita' ? incomeCategories : expenseCategories;
+            transactionCategorySelect.innerHTML = categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+        }
+
+        function addTransaction() {
+            modalTitle.textContent = "Adicionar Lançamento";
+            hideTransactionModal(); // Clear any previous state
+            populateCategorySelect(transactionTypeSelect.value);
+            showTransactionModal();
+        }
+
+        function editTransaction(index) {
+            modalTitle.textContent = "Editar Lançamento";
+            const transaction = transactions[index];
+            transactionIndexInput.value = index;
+            transactionDateInput.value = transaction.date;
+            transactionTypeSelect.value = transaction.type;
+            transactionDescriptionInput.value = transaction.description;
+            transactionValueInput.value = transaction.value;
+            populateCategorySelect(transaction.type);
+            transactionCategorySelect.value = transaction.category;
+            showTransactionModal();
+        }
+
+        function saveTransaction(event) {
+            event.preventDefault();
+            const index = transactionIndexInput.value;
+            const newTransaction = {
+                date: transactionDateInput.value,
+                type: transactionTypeSelect.value,
+                description: transactionDescriptionInput.value,
+                category: transactionCategorySelect.value,
+                value: parseFloat(transactionValueInput.value)
+            };
+            
+            if (index === '') {
+                // Add new transaction
+                transactions.push(newTransaction);
+            } else {
+                // Edit existing transaction
+                transactions[index] = newTransaction;
+            }
+
+            // Check if this transaction came from a planning item
+            const planningType = planningSourceTypeInput.value;
+            const planningIndex = planningSourceIndexInput.value;
+            if (planningType && planningIndex !== '') {
+                // Delete the original planning item
+                planningData[planningType].splice(planningIndex, 1);
+            }
+
+            saveToLocalStorage();
+            renderLancamentosTable();
+            renderPlanningTables(); // Update planning tables in case an item was removed
+            updateDashboard();
+            hideTransactionModal();
+        }
+
+        function deleteTransaction(index) {
+            if (window.confirm("Tem certeza que deseja excluir este lançamento? Esta ação é irreversível.")) {
+                transactions.splice(index, 1);
+                saveToLocalStorage();
+                renderLancamentosTable();
+                updateDashboard();
+            }
+        }
+
+        // --- Planning Functions ---
+
+        function renderPlanningTables() {
+            // Sort planning data by date in ascending order
+            const sortedReceber = [...planningData.receber].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const sortedPagar = [...planningData.pagar].sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            renderTable(receberTableBody, sortedReceber, "receber");
+            renderTable(pagarTableBody, sortedPagar, "pagar");
+        }
+
+        function renderTable(tableBody, data, type) {
+            tableBody.innerHTML = '';
+            data.forEach((item, index) => {
+                // Find the original index for editing/deleting
+                const originalIndex = planningData[type].indexOf(item);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${formatDate(item.date)}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">${item.description}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-gray-900">${formatCurrency(item.value)}</td>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                        <button onclick="editPlanningItem('${type}', ${originalIndex})" class="text-indigo-600 hover:text-indigo-900 mr-2">Editar</button>
+                        <button onclick="deletePlanningItem('${type}', ${originalIndex})" class="text-red-600 hover:text-red-900 mr-2">Excluir</button>
+                        <button onclick="finalizePlanningItem('${type}', ${originalIndex})" class="text-blue-600 hover:text-blue-900">Efetivar</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        
+        function showPlanningModal(type, index = null) {
+            planningTypeInput.value = type;
+            planningIndexInput.value = index;
+            planningModalTitle.textContent = (index === null) ? 
+                (type === 'receber' ? 'Adicionar Receita Planejada' : 'Adicionar Gasto Planejado') :
+                (type === 'receber' ? 'Editar Receita Planejada' : 'Editar Gasto Planejado');
+
+            if (index !== null) {
+                const item = planningData[type][index];
+                planningDateInput.value = item.date;
+                planningDescriptionInput.value = item.description;
+                planningValueInput.value = item.value;
+            } else {
+                planningForm.reset();
+            }
+
+            planningModal.classList.remove('hidden');
+        }
+
+        function editPlanningItem(type, index) {
+            showPlanningModal(type, index);
+        }
+
+        function hidePlanningModal() {
+            planningModal.classList.add('hidden');
+            planningForm.reset();
+            planningIndexInput.value = '';
+        }
+
+        function savePlanningItem(event) {
+            event.preventDefault();
+            const type = planningTypeInput.value;
+            const index = planningIndexInput.value;
+            const newItem = {
+                date: planningDateInput.value,
+                description: planningDescriptionInput.value,
+                value: parseFloat(planningValueInput.value)
+            };
+
+            if (index === '') {
+                planningData[type].push(newItem);
+            } else {
+                planningData[type][index] = newItem;
+            }
+            
+            saveToLocalStorage();
+            renderPlanningTables();
+            hidePlanningModal();
+        }
+
+        function deletePlanningItem(type, index) {
+            if (window.confirm("Tem certeza que deseja excluir este item?")) {
+                planningData[type].splice(index, 1);
+                saveToLocalStorage();
+                renderPlanningTables();
+            }
+        }
+
+        function finalizePlanningItem(type, index) {
+            const item = planningData[type][index];
+            
+            // Set up the hidden inputs to link the new transaction back to the planning item
+            planningSourceTypeInput.value = type;
+            planningSourceIndexInput.value = index;
+
+            // Pre-fill the transaction form
+            modalTitle.textContent = "Efetivar Lançamento";
+            transactionDateInput.value = item.date;
+            // Set transaction type based on planning type
+            transactionTypeSelect.value = (type === 'receber') ? 'Receita' : 'Despesa';
+            transactionDescriptionInput.value = item.description;
+            transactionValueInput.value = item.value;
+
+            // Set a default category
+            const defaultCategory = (type === 'receber') ? 'Outros' : 'Outros';
+            populateCategorySelect(transactionTypeSelect.value);
+            transactionCategorySelect.value = defaultCategory;
+
+            showTransactionModal();
+        }
+
+        // --- Event Listeners and Initialization ---
+
+        function setInitialDate() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            monthSelect.value = `${year}-${month}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setInitialDate();
+            renderLancamentosTable();
+            renderPlanningTables();
+            updateDashboard();
+
+            // Event Listeners for tabs
+            Object.keys(tabs).forEach(tabName => {
+                tabButtons[tabName].addEventListener('click', () => switchTab(tabName));
+            });
+
+            // Event listener to update the dashboard when the month changes
+            monthSelect.addEventListener('change', updateDashboard);
+
+            // Event Listeners for new forms
+            addLancamentoBtn.addEventListener('click', addTransaction);
+            transactionTypeSelect.addEventListener('change', (e) => populateCategorySelect(e.target.value));
+            transactionForm.addEventListener('submit', saveTransaction);
+            cancelBtn.addEventListener('click', hideTransactionModal);
+
+            // Event Listeners for planning buttons
+            document.getElementById('add-receber-btn').addEventListener('click', () => showPlanningModal('receber'));
+            document.getElementById('add-pagar-btn').addEventListener('click', () => showPlanningModal('pagar'));
+            planningForm.addEventListener('submit', savePlanningItem);
+            planningCancelBtn.addEventListener('click', hidePlanningModal);
+
+            document.getElementById('clear-data-btn').addEventListener('click', () => {
+                if (window.confirm("Tem certeza que deseja limpar todos os dados? Esta ação é irreversível.")) {
+                    localStorage.clear();
+                    transactions = [];
+                    planningData = { receber: [], pagar: [] };
+                    renderLancamentosTable();
+                    renderPlanningTables();
+                    updateDashboard();
+                    alert("Dados limpos com sucesso!");
+                }
+            });
+
+            document.getElementById('export-btn').addEventListener('click', () => {
+                const header = "Data,Tipo,Descricao,Categoria,Valor\n";
+                const csvContent = header + transactions.map(t =>
+                    `${t.date},${t.type},"${t.description.replace(/"/g, '""')}",${t.category},${t.value}`
+                ).join("\n");
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "orcamento_pessoal.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        });
+    </script>
+</body>
+</html>
