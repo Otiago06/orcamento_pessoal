@@ -56,6 +56,10 @@
                     <input type="month" id="month-select" class="form-input rounded-lg border-gray-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
                 </div>
                 <div class="flex space-x-2">
+                    <!-- NOVO: Botão de Importar e Input de Arquivo -->
+                    <input type="file" id="import-file-input" accept=".csv" class="hidden">
+                    <button id="import-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">Importar (CSV)</button>
+                    <!-- FIM NOVO -->
                     <button id="export-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">Exportar (CSV)</button>
                     <button id="clear-data-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">Limpar Dados</button>
                 </div>
@@ -97,7 +101,7 @@
                     + Adicionar Lançamento
                 </button>
 
-                <!-- NOVO: Controles de Filtro da Aba Lançamentos -->
+                <!-- Controles de Filtro da Aba Lançamentos -->
                 <div class="flex items-center space-x-2">
                     <label for="lancamentos-filter-type" class="text-gray-600 font-medium text-sm hidden sm:block">Filtro:</label>
                     <select id="lancamentos-filter-type" class="rounded-lg border-gray-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
@@ -131,7 +135,11 @@
         <div id="planejamento-tab-content" class="tab-content">
             <!-- Planejamento de Receitas -->
             <div class="mb-8">
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Contas a Receber (Ganhos Previstos)</h2>
+                <!-- ATUALIZADO: Inclui o total planejado -->
+                <h2 class="text-xl font-semibold text-gray-700 mb-4 flex justify-between items-center">
+                    Contas a Receber (Ganhos Previstos)
+                    <span id="total-planejado-receber" class="text-lg font-bold text-green-600 bg-green-100 px-3 py-1 rounded-full shadow-sm">R$ 0,00</span>
+                </h2>
                 <div class="overflow-x-auto bg-gray-50 rounded-xl shadow-sm">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-100">
@@ -156,7 +164,11 @@
             
             <!-- Planejamento de Despesas -->
             <div>
-                <h2 class="text-xl font-semibold text-gray-700 mb-4">Contas a Pagar (Gastos Previstos)</h2>
+                <!-- ATUALIZADO: Inclui o total planejado -->
+                <h2 class="text-xl font-semibold text-gray-700 mb-4 flex justify-between items-center">
+                    Contas a Pagar (Gastos Previstos)
+                    <span id="total-planejado-pagar" class="text-lg font-bold text-red-600 bg-red-100 px-3 py-1 rounded-full shadow-sm">R$ 0,00</span>
+                </h2>
                 <div class="overflow-x-auto bg-gray-50 rounded-xl shadow-sm">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-100">
@@ -289,6 +301,10 @@
         const lancamentosTableBody = document.getElementById('lancamentos-table-body');
         const receberTableBody = document.getElementById('receber-table-body');
         const pagarTableBody = document.getElementById('pagar-table-body');
+
+        // NOVOS: Elementos para os totais de planejamento
+        const totalPlanejadoReceberEl = document.getElementById('total-planejado-receber');
+        const totalPlanejadoPagarEl = document.getElementById('total-planejado-pagar');
         
         const addLancamentoBtn = document.getElementById('add-lancamento-btn');
         const transactionModal = document.getElementById('transaction-modal');
@@ -317,10 +333,13 @@
         const planningSourceTypeInput = document.getElementById('planning-source-type');
         const planningSourceIndexInput = document.getElementById('planning-source-index');
 
-        // NOVO: Elementos de filtro da aba Lançamentos
+        // Elementos de filtro da aba Lançamentos
         const lancamentosFilterTypeSelect = document.getElementById('lancamentos-filter-type');
         const lancamentosFilterMonthInput = document.getElementById('lancamentos-filter-month');
         
+        // NOVOS: Elementos de Importação
+        const importBtn = document.getElementById('import-btn');
+        const importFileInput = document.getElementById('import-file-input');
 
         // Chart instances
         let ganhosGastosChart = null;
@@ -352,6 +371,8 @@
             } else if (tabName === 'lancamentos') {
                 // Ao mudar para Lançamentos, garanta que a tabela seja renderizada com o filtro correto (padrão Mês Atual)
                 renderLancamentosTable();
+            } else if (tabName === 'planejamento') {
+                renderPlanningTables(); // Garante que os totais sejam calculados ao mudar para esta aba
             }
         }
 
@@ -584,16 +605,11 @@
         }
 
         function deleteTransaction(index) {
-            // Substitui window.confirm por um tratamento de erro (modal de confirmação seria ideal)
-            if (true) { // Aqui ficaria a lógica de confirmação
-                if(confirm("Tem certeza que deseja excluir este lançamento? Esta ação é irreversível.")) {
-                    transactions.splice(index, 1);
-                    saveToLocalStorage();
-                    renderLancamentosTable();
-                    updateDashboard();
-                }
-            } else {
-                console.error("Aviso: window.confirm não é suportado. Implementar modal de confirmação.");
+            if (confirm("Tem certeza que deseja excluir este lançamento? Esta ação é irreversível.")) {
+                transactions.splice(index, 1);
+                saveToLocalStorage();
+                renderLancamentosTable();
+                updateDashboard();
             }
         }
 
@@ -604,6 +620,14 @@
             const sortedReceber = [...planningData.receber].sort((a, b) => a.date.localeCompare(b.date));
             const sortedPagar = [...planningData.pagar].sort((a, b) => a.date.localeCompare(b.date));
             
+            // Cálculo dos Totais
+            const totalReceber = planningData.receber.reduce((sum, item) => sum + item.value, 0);
+            const totalPagar = planningData.pagar.reduce((sum, item) => sum + item.value, 0);
+
+            // Exibição dos Totais
+            totalPlanejadoReceberEl.textContent = formatCurrency(totalReceber);
+            totalPlanejadoPagarEl.textContent = formatCurrency(totalPagar);
+
             renderTable(receberTableBody, sortedReceber, "receber");
             renderTable(pagarTableBody, sortedPagar, "pagar");
         }
@@ -679,15 +703,10 @@
         }
 
         function deletePlanningItem(type, index) {
-            // Substitui window.confirm por um tratamento de erro (modal de confirmação seria ideal)
-            if (true) { // Aqui ficaria a lógica de confirmação
-                if(confirm("Tem certeza que deseja excluir este item?")) {
-                    planningData[type].splice(index, 1);
-                    saveToLocalStorage();
-                    renderPlanningTables();
-                }
-            } else {
-                console.error("Aviso: window.confirm não é suportado. Implementar modal de confirmação.");
+            if(confirm("Tem certeza que deseja excluir este item?")) {
+                planningData[type].splice(index, 1);
+                saveToLocalStorage();
+                renderPlanningTables();
             }
         }
 
@@ -712,6 +731,105 @@
             transactionCategorySelect.value = defaultCategory;
 
             showTransactionModal();
+        }
+
+        // --- CSV Import/Export Functions ---
+
+        /**
+         * Lida com a seleção do arquivo, leitura e processamento do CSV.
+         */
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csvData = e.target.result;
+                    const newTransactions = parseCSV(csvData);
+                    
+                    if (newTransactions.length === 0) {
+                        alert("O arquivo não continha transações válidas para importação.");
+                        return;
+                    }
+                    
+                    // Permite ao usuário escolher entre substituir ou anexar
+                    if (confirm(`Foram encontradas ${newTransactions.length} novas transações válidas.\n\nDeseja SUBSTITUIR todos os dados existentes (OK) ou apenas ANEXAR (CANCELAR)?`)) {
+                        transactions = newTransactions;
+                        alert('Dados substituídos com sucesso.');
+                    } else {
+                        transactions.push(...newTransactions);
+                        alert('Dados anexados com sucesso.');
+                    }
+                    
+                    saveToLocalStorage();
+                    renderLancamentosTable();
+                    updateDashboard();
+                    
+                    // Limpa o input do arquivo para permitir nova importação do mesmo arquivo
+                    event.target.value = null; 
+                } catch (error) {
+                    alert("Erro ao importar CSV: " + error.message);
+                    console.error("Erro na importação:", error);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        /**
+         * Analisa o conteúdo CSV e o converte em objetos de transação.
+         * Suporta formato de exportação e lida com ponto/vírgula no valor.
+         */
+        function parseCSV(csv) {
+            const lines = csv.trim().split('\n');
+            if (lines.length < 2) {
+                throw new Error("O arquivo CSV deve conter um cabeçalho e pelo menos uma linha de dados.");
+            }
+
+            // Mapeia o cabeçalho para minúsculas e remove aspas para fácil comparação
+            const header = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+            
+            if (!header.includes('data') || !header.includes('tipo') || !header.includes('valor')) {
+                throw new Error("O cabeçalho do CSV deve conter 'Data', 'Tipo', 'Descricao', 'Categoria' e 'Valor'.");
+            }
+
+            const dataLines = lines.slice(1);
+            const newTransactions = [];
+            const dateIndex = header.indexOf('data');
+            const typeIndex = header.indexOf('tipo');
+            const descriptionIndex = header.indexOf('descricao');
+            const categoryIndex = header.indexOf('categoria');
+            const valueIndex = header.indexOf('valor');
+
+            dataLines.forEach((line, lineIndex) => {
+                // Regex simples para lidar com vírgula dentro de aspas (CSV padrão)
+                const columns = line.match(/(".*?"|[^",\r\n]+)(?=\s*,|\s*$)/g).map(col => col.trim().replace(/^"|"$/g, ''));
+                
+                if (columns.length < 5) {
+                     console.warn(`Linha ${lineIndex + 2} ignorada: número de colunas inválido.`);
+                     return;
+                }
+
+                const type = columns[typeIndex];
+                // Remove aspas e tenta converter valor, aceitando ',' ou '.' como separador decimal
+                let rawValue = columns[valueIndex].replace(/"/g, '').replace(',', '.'); 
+                const value = parseFloat(rawValue); 
+                
+                if (!['Receita', 'Despesa'].includes(type) || isNaN(value) || value <= 0) {
+                    console.warn(`Linha ${lineIndex + 2} ignorada: Tipo ou Valor inválido. Valor: ${columns[valueIndex]}, Tipo: ${type}`);
+                    return;
+                }
+
+                newTransactions.push({
+                    date: columns[dateIndex],
+                    type: type,
+                    description: columns[descriptionIndex] || `Importado - Linha ${lineIndex + 2}`,
+                    category: columns[categoryIndex] || (type === 'Receita' ? 'Outros' : 'Outros'),
+                    value: value
+                });
+            });
+            
+            return newTransactions;
         }
 
         // --- Event Listeners and Initialization ---
@@ -741,7 +859,7 @@
             // Event listener to update the dashboard when the month changes
             monthSelect.addEventListener('change', updateDashboard);
             
-            // NOVO: Event Listeners para o filtro de Lançamentos
+            // Event Listeners para o filtro de Lançamentos
             lancamentosFilterTypeSelect.addEventListener('change', (e) => {
                 const filterType = e.target.value;
                 if (filterType === 'month-by-month') {
@@ -765,6 +883,9 @@
                 }
             });
 
+            // NOVOS: Event Listeners para Importação
+            importBtn.addEventListener('click', () => importFileInput.click());
+            importFileInput.addEventListener('change', handleFileImport);
 
             // Event Listeners for new forms
             addLancamentoBtn.addEventListener('click', addTransaction);
@@ -779,30 +900,30 @@
             planningCancelBtn.addEventListener('click', hidePlanningModal);
 
             document.getElementById('clear-data-btn').addEventListener('click', () => {
-                // Substitui window.confirm por um tratamento de erro (modal de confirmação seria ideal)
-                if (true) { // Aqui ficaria a lógica de confirmação
-                    if(confirm("Tem certeza que deseja limpar todos os dados? Esta ação é irreversível.")) {
-                        localStorage.clear();
-                        transactions = [];
-                        planningData = { receber: [], pagar: [] };
-                        renderLancamentosTable();
-                        renderPlanningTables();
-                        updateDashboard();
-                        // Substitui alert() por console.log() ou um modal personalizado
-                        console.log("Dados limpos com sucesso!"); 
-                    }
-                } else {
-                    console.error("Aviso: window.confirm/alert não são suportados. Implementar modal de confirmação/mensagem.");
+                if (confirm("Tem certeza que deseja limpar todos os dados? Esta ação é irreversível.")) {
+                    localStorage.clear();
+                    transactions = [];
+                    planningData = { receber: [], pagar: [] };
+                    renderLancamentosTable();
+                    renderPlanningTables();
+                    updateDashboard();
+                    console.log("Dados limpos com sucesso!"); 
                 }
             });
 
             document.getElementById('export-btn').addEventListener('click', () => {
                 const header = "Data,Tipo,Descricao,Categoria,Valor\n";
                 const csvContent = header + transactions.map(t =>
+                    // Garante que valores com vírgula (se houver) sejam envolvidos por aspas no CSV
                     `${t.date},${t.type},"${t.description.replace(/"/g, '""')}",${t.category},${t.value}`
                 ).join("\n");
 
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                // ** CORREÇÃO PARA ACENTUAÇÃO: Adiciona o Byte Order Mark (BOM) **
+                const bom = "\ufeff"; 
+
+                // Cria o Blob, incluindo o BOM no início para forçar o reconhecimento do UTF-8
+                const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+                
                 const link = document.createElement("a");
                 const url = URL.createObjectURL(blob);
                 link.setAttribute("href", url);
