@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="Tiago Oliveira">
-    <meta name="description" content="Planilha em desenvolvimento para auxiliar no controle e organização das finanças pessoais. Os dados são armazenados localmente no dispositivo do usuário (LocalStorage), garantindo praticidade e segurança." />
+    <meta name="description" content="Planilha de Orçamento Pessoal e Planejamento Financeiro para uso local.">
     <title>Planilha de Orçamento Pessoal</title>
     <!-- Favicon: Ícone de cifrão em SVG -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%233B82F6'/><text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-family='sans-serif' font-size='50' fill='white' font-weight='bold'>$</text></svg>">
@@ -92,10 +92,21 @@
 
         <!-- Lançamentos Tab Content -->
         <div id="lancamentos-tab-content" class="tab-content">
-            <div class="mb-4">
+            <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
                 <button id="add-lancamento-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors duration-200">
                     + Adicionar Lançamento
                 </button>
+
+                <!-- NOVO: Controles de Filtro da Aba Lançamentos -->
+                <div class="flex items-center space-x-2">
+                    <label for="lancamentos-filter-type" class="text-gray-600 font-medium text-sm hidden sm:block">Filtro:</label>
+                    <select id="lancamentos-filter-type" class="rounded-lg border-gray-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="current-month">Mês Atual</option>
+                        <option value="all">Todos os Lançamentos</option>
+                        <option value="month-by-month">Mês a Mês</option>
+                    </select>
+                    <input type="month" id="lancamentos-filter-month" class="rounded-lg border-gray-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 hidden">
+                </div>
             </div>
             <div class="overflow-x-auto bg-gray-50 rounded-xl shadow-sm">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -243,6 +254,11 @@
         </div>
     </div>
 
+    <!-- Add the discreet footer -->
+    <footer class="mt-8 text-center text-xs text-gray-500 pb-4">
+        ©2025 - Tiago Oliveira - All Rights Reserved
+    </footer>
+
     <script>
         // Data Structures
         let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
@@ -301,6 +317,11 @@
         const planningSourceTypeInput = document.getElementById('planning-source-type');
         const planningSourceIndexInput = document.getElementById('planning-source-index');
 
+        // NOVO: Elementos de filtro da aba Lançamentos
+        const lancamentosFilterTypeSelect = document.getElementById('lancamentos-filter-type');
+        const lancamentosFilterMonthInput = document.getElementById('lancamentos-filter-month');
+        
+
         // Chart instances
         let ganhosGastosChart = null;
         let despesasCategoriaChart = null;
@@ -328,6 +349,9 @@
 
             if (tabName === 'dashboard') {
                 updateDashboard();
+            } else if (tabName === 'lancamentos') {
+                // Ao mudar para Lançamentos, garanta que a tabela seja renderizada com o filtro correto (padrão Mês Atual)
+                renderLancamentosTable();
             }
         }
 
@@ -343,11 +367,19 @@
         // --- Dashboard Functions ---
 
         function updateDashboard() {
-            const [selectedYear, selectedMonth] = monthSelect.value.split('-').map(Number);
+            // Split the selected month (e.g., "2025-05")
+            const [selectedYearStr, selectedMonthStr] = monthSelect.value.split('-');
+            const selectedYear = parseInt(selectedYearStr);
+            const selectedMonth = parseInt(selectedMonthStr); // 1-based month (1 to 12)
             
+            // FIX: Use string comparison for filtering to avoid timezone issues with new Date()
             const filteredTransactions = transactions.filter(t => {
-                const date = new Date(t.date);
-                return date.getFullYear() === selectedYear && (date.getMonth() + 1) === selectedMonth;
+                // Parse date components directly from the string to avoid time zone issues.
+                const [transYearStr, transMonthStr] = t.date.split('-');
+                const transYear = parseInt(transYearStr);
+                const transMonth = parseInt(transMonthStr); // 1-based month (1 to 12)
+
+                return transYear === selectedYear && transMonth === selectedMonth;
             });
 
             const totalReceitas = filteredTransactions.filter(t => t.type === 'Receita').reduce((acc, t) => acc + t.value, 0);
@@ -421,12 +453,45 @@
         // --- Lançamentos Functions ---
 
         function renderLancamentosTable() {
-            // Sort transactions by date in ascending order
-            const sortedTransactions = [...transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+            let filteredTransactions = [...transactions];
+            
+            // 1. Aplica a Filtragem
+            const filterType = lancamentosFilterTypeSelect.value;
+            
+            if (filterType !== 'all') {
+                // Determina o mês de referência (YYYY-MM)
+                let referenceMonth = '';
+                if (filterType === 'current-month') {
+                    // Usa o mês selecionado no Dashboard como referência para "Mês Atual"
+                    referenceMonth = monthSelect.value; 
+                } else if (filterType === 'month-by-month') {
+                    // Usa o mês selecionado no input de filtro da aba Lançamentos
+                    referenceMonth = lancamentosFilterMonthInput.value;
+                }
+
+                if (referenceMonth) {
+                    const [yearStr, monthStr] = referenceMonth.split('-');
+                    const filterYear = parseInt(yearStr);
+                    const filterMonth = parseInt(monthStr);
+
+                    filteredTransactions = filteredTransactions.filter(t => {
+                        const [transYearStr, transMonthStr] = t.date.split('-');
+                        const transYear = parseInt(transYearStr);
+                        const transMonth = parseInt(transMonthStr);
+                        // Filtra transações onde ano e mês coincidem
+                        return transYear === filterYear && transMonth === filterMonth;
+                    });
+                }
+            }
+
+            // 2. Ordenação: por data string ascendente
+            const sortedTransactions = filteredTransactions.sort((a, b) => a.date.localeCompare(b.date));
             
             lancamentosTableBody.innerHTML = '';
+            
+            // 3. Renderização
             sortedTransactions.forEach((transaction, index) => {
-                // Find the original index for editing/deleting
+                // Encontra o índice original para edição/exclusão, já que a lista 'filteredTransactions' é uma cópia
                 const originalIndex = transactions.indexOf(transaction);
                 const row = document.createElement('tr');
                 row.innerHTML = `
@@ -464,6 +529,9 @@
         function addTransaction() {
             modalTitle.textContent = "Adicionar Lançamento";
             hideTransactionModal(); // Clear any previous state
+            // Set default date to today
+            const today = new Date().toISOString().split('T')[0];
+            transactionDateInput.value = today;
             populateCategorySelect(transactionTypeSelect.value);
             showTransactionModal();
         }
@@ -516,20 +584,25 @@
         }
 
         function deleteTransaction(index) {
-            if (window.confirm("Tem certeza que deseja excluir este lançamento? Esta ação é irreversível.")) {
-                transactions.splice(index, 1);
-                saveToLocalStorage();
-                renderLancamentosTable();
-                updateDashboard();
+            // Substitui window.confirm por um tratamento de erro (modal de confirmação seria ideal)
+            if (true) { // Aqui ficaria a lógica de confirmação
+                if(confirm("Tem certeza que deseja excluir este lançamento? Esta ação é irreversível.")) {
+                    transactions.splice(index, 1);
+                    saveToLocalStorage();
+                    renderLancamentosTable();
+                    updateDashboard();
+                }
+            } else {
+                console.error("Aviso: window.confirm não é suportado. Implementar modal de confirmação.");
             }
         }
 
         // --- Planning Functions ---
 
         function renderPlanningTables() {
-            // Sort planning data by date in ascending order
-            const sortedReceber = [...planningData.receber].sort((a, b) => new Date(a.date) - new Date(b.date));
-            const sortedPagar = [...planningData.pagar].sort((a, b) => new Date(a.date) - new Date(b.date));
+            // FIX: Sort planning data by date string in ascending order
+            const sortedReceber = [...planningData.receber].sort((a, b) => a.date.localeCompare(b.date));
+            const sortedPagar = [...planningData.pagar].sort((a, b) => a.date.localeCompare(b.date));
             
             renderTable(receberTableBody, sortedReceber, "receber");
             renderTable(pagarTableBody, sortedPagar, "pagar");
@@ -606,10 +679,15 @@
         }
 
         function deletePlanningItem(type, index) {
-            if (window.confirm("Tem certeza que deseja excluir este item?")) {
-                planningData[type].splice(index, 1);
-                saveToLocalStorage();
-                renderPlanningTables();
+            // Substitui window.confirm por um tratamento de erro (modal de confirmação seria ideal)
+            if (true) { // Aqui ficaria a lógica de confirmação
+                if(confirm("Tem certeza que deseja excluir este item?")) {
+                    planningData[type].splice(index, 1);
+                    saveToLocalStorage();
+                    renderPlanningTables();
+                }
+            } else {
+                console.error("Aviso: window.confirm não é suportado. Implementar modal de confirmação.");
             }
         }
 
@@ -629,7 +707,7 @@
             transactionValueInput.value = item.value;
 
             // Set a default category
-            const defaultCategory = (type === 'receber') ? 'Outros' : 'Outros';
+            const defaultCategory = (type === 'receber') ? 'Salário' : 'Contas Fixas';
             populateCategorySelect(transactionTypeSelect.value);
             transactionCategorySelect.value = defaultCategory;
 
@@ -642,7 +720,11 @@
             const today = new Date();
             const year = today.getFullYear();
             const month = (today.getMonth() + 1).toString().padStart(2, '0');
-            monthSelect.value = `${year}-${month}`;
+            const defaultMonth = `${year}-${month}`;
+            monthSelect.value = defaultMonth;
+
+            // Define o valor inicial para o input de filtro de Lançamentos
+            lancamentosFilterMonthInput.value = defaultMonth;
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -658,6 +740,31 @@
 
             // Event listener to update the dashboard when the month changes
             monthSelect.addEventListener('change', updateDashboard);
+            
+            // NOVO: Event Listeners para o filtro de Lançamentos
+            lancamentosFilterTypeSelect.addEventListener('change', (e) => {
+                const filterType = e.target.value;
+                if (filterType === 'month-by-month') {
+                    lancamentosFilterMonthInput.classList.remove('hidden');
+                } else {
+                    lancamentosFilterMonthInput.classList.add('hidden');
+                }
+                renderLancamentosTable();
+            });
+            
+            lancamentosFilterMonthInput.addEventListener('change', () => {
+                // Renderiza a tabela novamente ao mudar o mês no filtro 'Mês a Mês'
+                renderLancamentosTable();
+            });
+            
+            // Atualiza a tabela de Lançamentos quando o mês do Dashboard muda, se o filtro for 'Mês Atual'
+            monthSelect.addEventListener('change', () => {
+                updateDashboard();
+                if (lancamentosFilterTypeSelect.value === 'current-month') {
+                    renderLancamentosTable();
+                }
+            });
+
 
             // Event Listeners for new forms
             addLancamentoBtn.addEventListener('click', addTransaction);
@@ -672,14 +779,20 @@
             planningCancelBtn.addEventListener('click', hidePlanningModal);
 
             document.getElementById('clear-data-btn').addEventListener('click', () => {
-                if (window.confirm("Tem certeza que deseja limpar todos os dados? Esta ação é irreversível.")) {
-                    localStorage.clear();
-                    transactions = [];
-                    planningData = { receber: [], pagar: [] };
-                    renderLancamentosTable();
-                    renderPlanningTables();
-                    updateDashboard();
-                    alert("Dados limpos com sucesso!");
+                // Substitui window.confirm por um tratamento de erro (modal de confirmação seria ideal)
+                if (true) { // Aqui ficaria a lógica de confirmação
+                    if(confirm("Tem certeza que deseja limpar todos os dados? Esta ação é irreversível.")) {
+                        localStorage.clear();
+                        transactions = [];
+                        planningData = { receber: [], pagar: [] };
+                        renderLancamentosTable();
+                        renderPlanningTables();
+                        updateDashboard();
+                        // Substitui alert() por console.log() ou um modal personalizado
+                        console.log("Dados limpos com sucesso!"); 
+                    }
+                } else {
+                    console.error("Aviso: window.confirm/alert não são suportados. Implementar modal de confirmação/mensagem.");
                 }
             });
 
@@ -703,4 +816,3 @@
     </script>
 </body>
 </html>
-
